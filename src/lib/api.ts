@@ -32,14 +32,18 @@ export async function importM3u(src: M3uSource) {
 }
 
 export async function importEpg(src: EpgSource) {
-  return post<{ channelCount: number; programmeCount: number; channels: { id: string; name: string }[] }>(
-    "/epg/import",
-    {
-      url: src.url,
-      userAgent: src.userAgent,
-      referer: src.referer
-    }
-  );
+  return post<{
+    channelCount: number;
+    programmeCount: number;
+    channels: { id: string; name: string }[];
+    programmes: { channel: string; start: string; stop: string; title: string; desc?: string }[];
+  }>("/epg/import", {
+    url: src.url,
+    userAgent: src.userAgent,
+    referer: src.referer,
+    includeProgrammes: true,
+    maxProgrammes: 1200000
+  });
 }
 
 export async function stbConnect(src: PortalSource): Promise<StbSession> {
