@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "../lib/storage";
+import type { AppState } from "../lib/storage";
 import type { AnySource, EpgSource, M3uSource, PortalSource } from "../lib/types";
 import { clamp, uid } from "../lib/utils";
 import { Btn, Field, Input, Select } from "../ui/Controls";
 import { Card, Row } from "../ui/List";
 import { importEpg, importM3u, stbChannels, stbConnect } from "../lib/api";
+import { startScheduler } from "../lib/scheduler";
 
 const defaultUA =
   "Mozilla/5.0 (Linux; Android 10; MAG 250) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
@@ -87,7 +89,7 @@ export default function Sources() {
     try {
       if (s.kind === "m3u") {
         const r = await importM3u(s);
-        const next = {
+        const next: AppState = {
           ...state,
           m3uCache: { ...state.m3uCache, [s.id]: { fetchedAt: Date.now(), channels: r.channels } }
         };
@@ -96,18 +98,21 @@ export default function Sources() {
         setMsg(`M3U imported: ${r.count} channels`);
       } else if (s.kind === "epg") {
         const r = await importEpg(s);
-        const next = {
+        const next: AppState = {
           ...state,
-          epgCache: { ...state.epgCache, [s.id]: { fetchedAt: Date.now(), channels: r.channels } }
+          epgCache: {
+            ...state.epgCache,
+            [s.id]: { fetchedAt: Date.now(), channels: r.channels, programmes: r.programmes }
+          }
         };
         setState(next);
         saveState(next);
-        setMsg(`EPG imported: ${r.channelCount} channels`);
+        setMsg(`EPG imported: ${r.channelCount} channels, ${r.programmeCount} programmes`);
       } else {
         const session = await stbConnect(s);
         const r = await stbChannels(s, session);
         const rows = normalizeStbChannels(r.raw, s.id);
-        const next = {
+        const next: AppState = {
           ...state,
           live: { ...state.live, channels: mergeLiveChannels(state.live.channels, rows) }
         };
@@ -121,6 +126,14 @@ export default function Sources() {
       setBusyId(null);
     }
   };
+
+  useEffect(() => {
+    const handle = startScheduler(state.sources, async (src) => {
+      if (!src.enabled) return;
+      await refreshOne(src);
+    });
+    return () => handle.stop();
+  }, [state.sources]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -193,7 +206,10 @@ export default function Sources() {
                 </Field>
 
                 <Field label="User-Agent">
-                  <Input value={(s as any).userAgent} onChange={(e) => update(s.id, { userAgent: e.target.value } as any)} />
+                  <Input
+                    value={(s as any).userAgent}
+                    onChange={(e) => update(s.id, { userAgent: e.target.value } as any)}
+                  />
                 </Field>
 
                 <Field label="Referer (optional)">
@@ -218,10 +234,7 @@ export default function Sources() {
                 ) : (
                   <>
                     <Field label="Remote URL">
-                      <Input
-                        value={s.kind === "m3u" ? s.url : (s as any).url}
-                        onChange={(e) => update(s.id, { url: e.target.value } as any)}
-                      />
+                      <Input value={(s as any).url} onChange={(e) => update(s.id, { url: e.target.value } as any)} />
                     </Field>
                   </>
                 )}
