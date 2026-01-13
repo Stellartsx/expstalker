@@ -14,7 +14,7 @@ export function xmlToJson(xml: string): Promise<any> {
     parseString(
       xml,
       { explicitArray: false, mergeAttrs: true, trim: true },
-      (err, res) => {
+      (err: Error | null, res: any) => {
         if (err) reject(err);
         else resolve(res);
       }
