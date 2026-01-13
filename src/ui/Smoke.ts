@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 type P = { x: number; y: number; r: number; vx: number; vy: number; a: number; da: number };
 
+
 export default function Smoke() {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const parts = useMemo<P[]>(() => {
