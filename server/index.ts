@@ -161,6 +161,9 @@ app.post("/api/epg/import", async (req, res) => {
     const url = String(req.body?.url || "");
     const userAgent = String(req.body?.userAgent || defaultUserAgent);
     const referer = String(req.body?.referer || "");
+    const includeProgrammes = Boolean(req.body?.includeProgrammes ?? true);
+    const maxProgrammes = Math.max(0, Math.min(300000, Number(req.body?.maxProgrammes ?? 120000)));
+
     assertUrl(url);
 
     const headers: Record<string, string> = {
@@ -169,7 +172,7 @@ app.post("/api/epg/import", async (req, res) => {
     };
     if (referer) headers["Referer"] = referer;
 
-    const r = await fetchWithTimeout(url, { headers }, 90000);
+    const r = await fetchWithTimeout(url, { headers }, 120000);
     if (!r.ok) throw new Error(`EPG fetch failed: ${r.status}`);
 
     const ct = String(r.headers.get("content-type") || "");
@@ -191,10 +194,13 @@ app.post("/api/epg/import", async (req, res) => {
     const xml = buf.toString("utf8");
     const parsed = await parseXmlTv(xml);
 
+    const programmes = includeProgrammes ? parsed.programmes.slice(0, maxProgrammes) : [];
+
     res.json({
       channelCount: parsed.channels.length,
       programmeCount: parsed.programmes.length,
-      channels: parsed.channels
+      channels: parsed.channels,
+      programmes
     });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message || e) });
@@ -225,9 +231,7 @@ app.post("/api/stb/connect", async (req, res) => {
 
     const j = await stbJson(url, { ...h, Cookie: cookie }, 60000);
 
-    const token =
-      String(j?.js?.token || j?.js?.api_token || j?.js?.token_key || "").trim();
-
+    const token = String(j?.js?.token || j?.js?.api_token || j?.js?.token_key || "").trim();
     if (!token) throw new Error("handshake returned no token");
 
     res.json({ base, token });
@@ -259,11 +263,7 @@ app.post("/api/stb/channels", async (req, res) => {
       JsHttpRequest: "1-xml"
     });
 
-    const j = await stbJson(
-      url,
-      { ...h, Cookie: cookie, Authorization: `Bearer ${token}` },
-      90000
-    );
+    const j = await stbJson(url, { ...h, Cookie: cookie, Authorization: `Bearer ${token}` }, 90000);
 
     res.json({ raw: j });
   } catch (e: any) {
@@ -296,11 +296,7 @@ app.post("/api/stb/create_link", async (req, res) => {
       JsHttpRequest: "1-xml"
     });
 
-    const j = await stbJson(
-      url,
-      { ...h, Cookie: cookie, Authorization: `Bearer ${token}` },
-      90000
-    );
+    const j = await stbJson(url, { ...h, Cookie: cookie, Authorization: `Bearer ${token}` }, 90000);
 
     res.json({ raw: j });
   } catch (e: any) {
